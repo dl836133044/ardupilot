@@ -1,0 +1,11 @@
+AP_LIBRARY(AP_RC_Switch
+    SRCS
+        AP_RC_Switch.cpp
+    HDRS
+        AP_RC_Switch.h
+    DEPENDS
+        AP_Common
+        AP_HAL
+        RC_Channel
+        GCS_MAVLink
+)

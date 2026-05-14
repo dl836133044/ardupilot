@@ -129,6 +129,8 @@
 
 #include <AP_Camera/AP_Camera.h>
 
+#include <AP_RC_Switch/AP_RC_Switch.h>
+
 #if HAL_BUTTON_ENABLED
  # include <AP_Button/AP_Button.h>
 #endif
@@ -321,6 +323,8 @@ private:
     AP_ExternalControl_Copter external_control;
 #endif
 
+    // RC Switch Monitor
+    AP_RC_Switch rc_switch;
 
     // system time in milliseconds of last recorded yaw reset from ekf
     uint32_t ekfYawReset_ms;

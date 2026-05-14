@@ -258,6 +258,7 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if HAL_BUTTON_ENABLED
     SCHED_TASK_CLASS(AP_Button,            &copter.button,              update,           5, 100, 168),
 #endif
+    SCHED_TASK_CLASS(AP_RC_Switch,         &copter.rc_switch,           update,          10, 100, 169),
 #if AP_INERTIALSENSOR_FAST_SAMPLE_WINDOW_ENABLED
     // don't delete this, there is an equivalent (virtual) in AP_Vehicle for the non-rate loop case
     SCHED_TASK(update_dynamic_notch_at_specified_rate_main,                       LOOP_RATE, 200, 215),
