@@ -6,6 +6,9 @@
 #include "RC_Channel_Copter.h"
 #include <AP_Proximity/AP_Proximity.h>
 
+// 前向声明避免循环依赖
+class AP_RC_Switch;
+
 #if MODE_FOLLOW_ENABLED
  # include <AP_Follow/AP_Follow.h>
 #endif
@@ -510,6 +513,9 @@ public:
 #if HAL_BUTTON_ENABLED
     AP_Button *button_ptr;
 #endif
+
+    // RC Switch Monitor
+    AP_RC_Switch *rc_switch_ptr;
 
 #if MODE_THROW_ENABLED
     // Throw mode parameters

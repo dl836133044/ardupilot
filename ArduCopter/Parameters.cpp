@@ -2,6 +2,7 @@
 
 #include <AP_Gripper/AP_Gripper.h>
 #include <AP_InertialSensor/AP_InertialSensor_rate_config.h>
+#include <AP_RC_Switch/AP_RC_Switch.h>
 
 /*
    This program is free software: you can redistribute it and/or modify
@@ -914,6 +915,10 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     AP_SUBGROUPPTR(mode_zigzag_ptr, "ZIGZ_", 38, ParametersG2, ModeZigZag),
 #endif
 
+    // @Group: RC_SW_
+    // @Path: ../libraries/AP_RC_Switch/AP_RC_Switch.cpp
+    AP_SUBGROUPPTR(rc_switch_ptr, "RC_SW_", 60, ParametersG2, AP_RC_Switch),
+
 #if MODE_ACRO_ENABLED
     // @Param: ACRO_OPTIONS
     // @DisplayName: Acro mode options
@@ -1241,6 +1246,7 @@ ParametersG2::ParametersG2(void) :
 #if HAL_BUTTON_ENABLED
     ,button_ptr(&copter.button)
 #endif
+    ,rc_switch_ptr(&copter.rc_switch)
 #if AP_TEMPCALIBRATION_ENABLED
     , temp_calibration()
 #endif
