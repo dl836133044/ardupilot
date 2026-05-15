@@ -1,6 +1,8 @@
 #include "AP_RC_Switch.h"
 #include <RC_Channel/RC_Channel.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_RangeFinder/AP_RangeFinder.h>
+#include <AP_RangeFinder/AP_RangeFinder_Backend.h>
 #include <cstdarg>
 
 const AP_Param::GroupInfo AP_RC_Switch::var_info[] = {
@@ -32,12 +34,21 @@ const AP_Param::GroupInfo AP_RC_Switch::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("HIGH_THR", 4, AP_RC_Switch, _high_threshold, 1800),
 
+    // @Param: RNG_EN
+    // @DisplayName: Rangefinder Enable
+    // @Description: Enable rangefinder data acquisition
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    AP_GROUPINFO("RNG_EN", 5, AP_RC_Switch, _enable_rangefinder, 1),
+
     AP_GROUPEND
 };
 
 AP_RC_Switch::AP_RC_Switch() :
     _last_pos_value(255),
-    _last_print_ms(0)
+    _last_print_ms(0),
+    _last_rng1_distance(-1.0f),
+    _last_rng2_distance(-1.0f)
 {
     AP_Param::setup_object_defaults(this, var_info);
 }
@@ -121,5 +132,61 @@ void AP_RC_Switch::update()
 
         // 消息3: 自定义格式
         send_msg("RC_CH%d:POS=%s,PWM=%d", _channel.get(), pos_name, pwm);
+    }
+    
+    // 读取雷达数据
+    read_rangefinder_data();
+}
+
+void AP_RC_Switch::read_rangefinder_data()
+{
+    // 如果雷达功能未启用，直接返回
+    if (!_enable_rangefinder.get()) {
+        return;
+    }
+
+    RangeFinder *rng = AP::rangefinder();
+    if (rng == nullptr) {
+        return;
+    }
+
+    uint32_t now = AP_HAL::millis();
+    
+    // 获取雷达1数据（索引0）
+    float rng1_dist = 0.0f;
+    if (rng->num_sensors() > 0) {
+        AP_RangeFinder_Backend *sensor1 = rng->get_backend(0);
+        if (sensor1 != nullptr) {
+            rng1_dist = sensor1->distance();  // 单位：米
+        }
+    }
+    
+    // 获取雷达2数据（索引1）
+    float rng2_dist = 0.0f;
+    if (rng->num_sensors() > 1) {
+        AP_RangeFinder_Backend *sensor2 = rng->get_backend(1);
+        if (sensor2 != nullptr) {
+            rng2_dist = sensor2->distance();  // 单位：米
+        }
+    }
+
+    // 固定5秒打印一次
+    bool need_print = false;
+    if (now - _last_rng_print_ms >= PRINT_INTERVAL_MS) {
+        need_print = true;
+        _last_rng_print_ms = now;
+        _last_rng1_distance = rng1_dist;
+        _last_rng2_distance = rng2_dist;
+    }
+
+    if (need_print) {
+        // 打印雷达数量和距离
+        send_msg("Radar: %d sensors", rng->num_sensors());
+        send_msg("Radar1: %.2fm", rng1_dist);
+        send_msg("Radar2: %.2fm", rng2_dist);
+
+        // 通过MAVLink发送距离数据
+        gcs().send_named_float("RNG1_DIST_M", rng1_dist);
+        gcs().send_named_float("RNG2_DIST_M", rng2_dist);
     }
 }

@@ -8,4 +8,5 @@ AP_LIBRARY(AP_RC_Switch
         AP_HAL
         RC_Channel
         GCS_MAVLink
+        AP_RangeFinder
 )
