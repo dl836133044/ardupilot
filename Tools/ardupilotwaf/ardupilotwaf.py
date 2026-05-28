@@ -85,6 +85,7 @@ COMMON_VEHICLE_DEPENDENT_LIBRARIES = [
     'AP_IOMCU',
     'AP_Parachute',
     'AP_RAMTRON',
+    'AP_CH9434',
     'AP_RCProtocol',
     'AP_Radio',
     'AP_TempCalibration',

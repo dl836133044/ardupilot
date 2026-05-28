@@ -88,6 +88,10 @@
 
 #include <AP_IBus_Telem/AP_IBus_Telem.h>
 
+#if HAL_CH9434_ENABLED
+#include <AP_CH9434/AP_CH9434_UARTDriver.h>
+#endif
+
 class AP_DDS_Client;
 
 class AP_Vehicle : public AP_HAL::HAL::Callbacks {
@@ -520,6 +524,11 @@ protected:
 
     // check for motor noise at a particular frequency
     void check_motor_noise();
+
+#if HAL_CH9434_ENABLED
+    // update CH9434 SPI-to-4UART module
+    void ch9434_update();
+#endif
 
     ModeReason control_mode_reason = ModeReason::UNKNOWN;
 

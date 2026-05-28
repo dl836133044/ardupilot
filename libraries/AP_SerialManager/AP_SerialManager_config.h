@@ -74,6 +74,9 @@
 // serial device simulation ports registered by AP_Scripting will use IDs starting at 61 for the first port
 #define AP_SERIALMANAGER_SCR_PORT_1         61 // SCR_SDEV1_*
 
+// serial ports registered by AP_CH9434 will use IDs starting at 71 for the first port
+#define AP_SERIALMANAGER_CH9434_PORT_1      71 // CH9434_S1_*
+
  // console default baud rates and buffer sizes
 #ifdef DEFAULT_SERIAL0_BAUD
 #define AP_SERIALMANAGER_CONSOLE_BAUD          DEFAULT_SERIAL0_BAUD

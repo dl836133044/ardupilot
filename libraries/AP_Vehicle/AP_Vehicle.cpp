@@ -28,6 +28,10 @@ extern AP_IOMCU iomcu;
 #endif
 #include <AP_Scripting/AP_Scripting.h>
 
+#if HAL_CH9434_ENABLED
+#include <AP_CH9434/AP_CH9434_UARTDriver.h>
+#endif
+
 #define SCHED_TASK(func, rate_hz, max_time_micros, prio) SCHED_TASK_CLASS(AP_Vehicle, &vehicle, func, rate_hz, max_time_micros, prio)
 
 /*
@@ -369,6 +373,11 @@ void AP_Vehicle::setup()
     // initialise serial ports
     serial_manager.init();
 #endif
+
+#if HAL_CH9434_ENABLED
+    // initialise CH9434 SPI-to-4UART expansion module
+    AP::ch9434()->init();
+#endif
 #if HAL_GCS_ENABLED
     gcs().setup_console();
 #endif
@@ -672,6 +681,9 @@ const AP_Scheduler::Task AP_Vehicle::scheduler_tasks[] = {
 #endif
 #if AP_AIS_ENABLED
     SCHED_TASK_CLASS(AP_AIS,       &vehicle.ais,            update,                    5, 100, 249),
+#endif
+#if HAL_CH9434_ENABLED
+    SCHED_TASK(ch9434_update,                                 50,  50, 252),
 #endif
 #if HAL_EFI_ENABLED
     SCHED_TASK_CLASS(AP_EFI,       &vehicle.efi,            update,                   50, 200, 250),
@@ -1054,6 +1066,14 @@ void AP_Vehicle::accel_cal_update()
 void AP_Vehicle::update_arming()
 {
     AP::arming().update();
+}
+#endif
+
+#if HAL_CH9434_ENABLED
+// update CH9434 SPI-to-4UART module
+void AP_Vehicle::ch9434_update()
+{
+    AP::ch9434()->update();
 }
 #endif
 
