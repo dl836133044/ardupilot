@@ -161,6 +161,26 @@ extern const AP_HAL::HAL& hal;
 #error "Please use DEFAULT_SERIAL9_PROTOCOL"
 #endif
 
+#ifndef DEFAULT_SERIAL10_PROTOCOL
+#define DEFAULT_SERIAL10_PROTOCOL SerialProtocol_None
+#endif
+#ifndef DEFAULT_SERIAL10_BAUD
+#define DEFAULT_SERIAL10_BAUD AP_SERIALMANAGER_MAVLINK_BAUD/1000
+#endif
+#ifndef DEFAULT_SERIAL10_OPTIONS
+#define DEFAULT_SERIAL10_OPTIONS 0
+#endif
+
+#ifndef DEFAULT_SERIAL11_PROTOCOL
+#define DEFAULT_SERIAL11_PROTOCOL SerialProtocol_None
+#endif
+#ifndef DEFAULT_SERIAL11_BAUD
+#define DEFAULT_SERIAL11_BAUD AP_SERIALMANAGER_MAVLINK_BAUD/1000
+#endif
+#ifndef DEFAULT_SERIAL11_OPTIONS
+#define DEFAULT_SERIAL11_OPTIONS 0
+#endif
+
 const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
 #if HAL_HAVE_SERIAL0_PARAMS
     // @Param: 0_BAUD
@@ -393,6 +413,44 @@ const AP_Param::GroupInfo AP_SerialManager::var_info[] = {
     // @CopyFieldsFrom: SERIAL1_OPTIONS
     // @DisplayName: Serial9 options
     AP_GROUPINFO("9_OPTIONS",  31, AP_SerialManager, state[9].options, DEFAULT_SERIAL9_OPTIONS),
+#endif
+
+#if HAL_HAVE_SERIAL10_PARAMS || HAL_CH9434_ENABLED
+    // @Param: 10_PROTOCOL
+    // @CopyFieldsFrom: SERIAL1_PROTOCOL
+    // @DisplayName: Serial10 protocol selection (CH9434 Port 3)
+    // @Description: Control what protocol Serial10 port should be used for. This port is provided by CH9434 SPI-to-4UART module.
+    AP_GROUPINFO("10_PROTOCOL",  32, AP_SerialManager, state[10].protocol, DEFAULT_SERIAL10_PROTOCOL),
+
+    // @Param: 10_BAUD
+    // @CopyFieldsFrom: SERIAL1_BAUD
+    // @DisplayName: Serial10 Baud Rate (CH9434 Port 3)
+    // @Description: The baud rate used for Serial10. This port is provided by CH9434 SPI-to-4UART module.
+    AP_GROUPINFO("10_BAUD", 33, AP_SerialManager, state[10].baud, DEFAULT_SERIAL10_BAUD),
+
+    // @Param: 10_OPTIONS
+    // @CopyFieldsFrom: SERIAL1_OPTIONS
+    // @DisplayName: Serial10 options (CH9434 Port 3)
+    AP_GROUPINFO("10_OPTIONS",  34, AP_SerialManager, state[10].options, DEFAULT_SERIAL10_OPTIONS),
+#endif
+
+#if HAL_HAVE_SERIAL11_PARAMS || HAL_CH9434_ENABLED
+    // @Param: 11_PROTOCOL
+    // @CopyFieldsFrom: SERIAL1_PROTOCOL
+    // @DisplayName: Serial11 protocol selection (CH9434 Port 4)
+    // @Description: Control what protocol Serial11 port should be used for. This port is provided by CH9434 SPI-to-4UART module.
+    AP_GROUPINFO("11_PROTOCOL",  35, AP_SerialManager, state[11].protocol, DEFAULT_SERIAL11_PROTOCOL),
+
+    // @Param: 11_BAUD
+    // @CopyFieldsFrom: SERIAL1_BAUD
+    // @DisplayName: Serial11 Baud Rate (CH9434 Port 4)
+    // @Description: The baud rate used for Serial11. This port is provided by CH9434 SPI-to-4UART module.
+    AP_GROUPINFO("11_BAUD", 36, AP_SerialManager, state[11].baud, DEFAULT_SERIAL11_BAUD),
+
+    // @Param: 11_OPTIONS
+    // @CopyFieldsFrom: SERIAL1_OPTIONS
+    // @DisplayName: Serial11 options (CH9434 Port 4)
+    AP_GROUPINFO("11_OPTIONS",  37, AP_SerialManager, state[11].options, DEFAULT_SERIAL11_OPTIONS),
 #endif
 
     AP_GROUPEND
