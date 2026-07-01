@@ -156,7 +156,8 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
     local right_pwm = speed_pwm
     
     -- 转向时：根据油门大小动态调整转向范围，保证电机不停止
-    if turn_factor > 0 and speed_pwm > 1000 then
+    -- 只有当有效转向大于死区阈值时才执行转向
+    if turn_factor > 0 and speed_pwm > 1000 and math.abs(effective_steering) > 5 then
         local speed_factor = (speed_pwm - 1000) / 1000
         local max_turn_ratio = speed_factor * 0.4
         local turn_ratio = math.abs(effective_steering) / 100 * max_turn_ratio
@@ -168,6 +169,13 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
             left_pwm = speed_pwm * (1 - turn_ratio)
             right_pwm = speed_pwm
         end
+    end
+    
+    -- 最低速度保护：任何时候都不能低于当前速度的70%
+    if speed_pwm > 1000 then
+        local min_speed = 1000 + (speed_pwm - 1000) * 0.7
+        left_pwm = math.max(min_speed, left_pwm)
+        right_pwm = math.max(min_speed, right_pwm)
     end
     
     -- 油门为0时，禁用PID和姿态辅助，电机完全停止
