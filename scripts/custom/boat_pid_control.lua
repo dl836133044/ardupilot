@@ -190,14 +190,16 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
         right_pwm = math.min(2000, right_pwm - (pid_output / 100) * 100)
     end
     
-    -- 姿态辅助（只微调，不影响主速度）
-    local roll_correction = roll_deg * ROLL_KP
-    left_pwm = math.max(1000, math.min(2000, left_pwm - roll_correction))
-    right_pwm = math.max(1000, math.min(2000, right_pwm + roll_correction))
-    
-    local pitch_correction = pitch_deg * PITCH_KP
-    left_pwm = math.max(1000, math.min(2000, left_pwm - pitch_correction))
-    right_pwm = math.max(1000, math.min(2000, right_pwm - pitch_correction))
+    -- 姿态辅助（有油门时实时调整，防止翻船）
+    if speed_pwm > 1000 then
+        local roll_correction = roll_deg * ROLL_KP
+        left_pwm = math.max(1000, math.min(2000, left_pwm - roll_correction))
+        right_pwm = math.max(1000, math.min(2000, right_pwm + roll_correction))
+        
+        local pitch_correction = pitch_deg * PITCH_KP
+        left_pwm = math.max(1000, math.min(2000, left_pwm - pitch_correction))
+        right_pwm = math.max(1000, math.min(2000, right_pwm - pitch_correction))
+    end
     
     return left_pwm, right_pwm, throttle, steering_ch1, ch2_offset / 5, pid_output, roll_deg, pitch_deg, speed_pwm, effective_steering
 end
