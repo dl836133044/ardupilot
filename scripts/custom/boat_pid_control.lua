@@ -9,16 +9,39 @@ local CH2_PIN = 2
 local CH3_PIN = 3
 
 -- PID参数
-local PID_KP = 3.0
+local PID_KP = 5.0
 local PID_KI = 0.2
 local PID_KD = 0.5
 
+-- 前馈增益（官方FF参数）
+local PID_FF = 0.5
+
+-- 时间常数（官方TCONST，控制响应速度）
+local TAU = 0.75
+
 -- 姿态辅助参数
-local ROLL_KP = 2.0
-local PITCH_KP = 2.0
+local ROLL_KP = 1.5
+local PITCH_KP = 1.5
 
 -- 电机最小转速比例（防止转向时电机停止）
 local MIN_MOTOR_RATIO = 0.5
+
+-- 积分限幅（官方IMAX）
+local INTEGRAL_LIMIT = 50.0
+
+-- 输出限幅
+local OUTPUT_LIMIT = 50.0
+
+-- 积分分离阈值（误差超过此值时不积分）
+local INTEGRAL_SEPARATION_THRESHOLD = 20.0
+
+-- 最小速度（官方MINSPD，防止低速振荡）
+local MIN_SPEED_MPS = 1.0
+
+-- 高速转向限制参数（官方DRTSPD/DRTFCT/DRTMIN）
+local DERATE_SPEED_MPS = 5.0   -- 超过此速度开始限制转向
+local DERATE_FACTOR = 10.0     -- 每增加1m/s减少的转向角度
+local MIN_STEER_DEG = 10.0     -- 最小转向角度限制
 
 -- 通道位置阈值
 local CH_LOW_THRESHOLD = 1300
@@ -46,6 +69,8 @@ local DEBUG_INTERVAL = 10000
 local last_time = 0
 local last_yaw_value = 0
 local integral = 0
+local last_error = 0
+local last_pid_output = 0
 
 -- 从飞控参数 SCR_USER2 读取日志文件写入设置
 local function get_log_to_file()
@@ -93,7 +118,7 @@ local function is_flying()
     return false
 end
 
--- PID控制
+-- PID控制（参考官方AP_SteerController实现）
 local function pid_control(ch1_value, ch2_value, ch3_value, now)
     local ch1_num = tonumber(ch1_value) or 1500
     local ch2_num = tonumber(ch2_value) or 1500
@@ -115,17 +140,25 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
         speed = throttle
     end
     
-    local speed_pwm = 1000 + (speed / 100) * 1000
-    speed_pwm = math.max(1000, math.min(2000, speed_pwm))
-    speed_pwm = tonumber(speed_pwm) or 1000
+    local speed_pwm = 1500 + (speed / 100) * 500
+    speed_pwm = math.max(1500, math.min(2000, speed_pwm))
+    speed_pwm = tonumber(speed_pwm) or 1500
     
     local now_num = tonumber(now) or 0
     local last_time_num = tonumber(last_time) or 0
     local dt = (now_num - last_time_num) / 1000
+    if dt <= 0 then dt = 0.01 end
     
+    -- 读取姿态信息
     local yaw = ahrs:get_yaw_rad() or 0
     local yaw_num = tonumber(yaw) or 0
     
+    local roll = ahrs:get_roll_rad() or 0
+    local pitch = ahrs:get_pitch_rad() or 0
+    local roll_deg = tonumber(roll) * 57.3
+    local pitch_deg = tonumber(pitch) * 57.3
+    
+    -- 计算角速度（弧度/秒）
     local yaw_rate = 0
     if dt > 0 and last_time_num > 0 then
         yaw_rate = (yaw_num - last_yaw_value) / dt
@@ -133,32 +166,93 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
     last_time = now
     last_yaw_value = yaw_num
     
-    local roll = ahrs:get_roll_rad() or 0
-    local pitch = ahrs:get_pitch_rad() or 0
-    local roll_deg = tonumber(roll) * 57.3
-    local pitch_deg = tonumber(pitch) * 57.3
+    -- 获取地面速度（使用油门速度代替，因为get_groundspeed不存在）
+    -- 低速时转向效果更明显，高速时转向效果减弱
+    local groundspeed = speed / 20 + 1.0
+    if groundspeed < MIN_SPEED_MPS then
+        groundspeed = MIN_SPEED_MPS
+    end
     
-    local target_yaw_change = effective_steering * 0.05
-    local error = target_yaw_change - yaw_rate
+    -- 速度缩放因子（参考官方实现：scaler = 1/speed）
+    -- 低速时转向效果更明显，高速时转向效果减弱
+    local speed_scaler = 1.0 / groundspeed
+    
+    -- 目标角速度（根据转向输入和时间常数计算）
+    -- 参考官方：desired_rate = angle_err * 0.01 / _tau
+    local target_yaw_rate_deg = effective_steering * 45.0 / TAU
+    
+    -- 当前角速度（转换为度/秒）
+    local current_yaw_rate_deg = yaw_rate * 57.3
+    
+    -- 角速度误差（参考官方：乘以速度缩放因子）
+    local rate_error = (target_yaw_rate_deg - current_yaw_rate_deg) * speed_scaler
+    
+    -- 等效增益计算（参考官方实现）
+    local ki_rate = PID_KI * TAU * 45.0
+    local kp_ff = math.max((PID_KP - PID_KI * TAU) * TAU - PID_KD, 0) * 45.0
+    local k_ff = PID_FF * 45.0
+    
+    -- 积分项（参考官方：积分抗饱和）
+    local integrator_delta = 0
+    if ki_rate > 0 and groundspeed >= MIN_SPEED_MPS then
+        if dt > 0 then
+            integrator_delta = rate_error * ki_rate * dt * speed_scaler
+            -- 积分抗饱和：输出极限时限制积分方向
+            if last_pid_output > OUTPUT_LIMIT then
+                integrator_delta = math.min(integrator_delta, 0)
+            elseif last_pid_output < -OUTPUT_LIMIT then
+                integrator_delta = math.max(integrator_delta, 0)
+            end
+            integral = integral + integrator_delta
+        end
+    else
+        integral = 0
+    end
+    -- 积分限幅
+    integral = math.max(-INTEGRAL_LIMIT, math.min(INTEGRAL_LIMIT, integral))
+    
+    -- 积分项输出
+    local i_out = integral * PID_KI * TAU * 45.0 * speed_scaler
+    
+    -- 微分项
+    local d_out = rate_error * PID_KD * 4.0
+    
+    -- 比例项（参考官方：乘以速度缩放因子）
+    local p_out = math.rad(target_yaw_rate_deg) * kp_ff * speed_scaler
+    
+    -- 前馈项（参考官方FF参数）
+    local ff_out = math.rad(target_yaw_rate_deg) * k_ff * speed_scaler
     
     -- 方向回正时重置积分项
     if math.abs(effective_steering) < 5 then
         integral = 0
-    else
-        integral = math.max(-5, math.min(5, integral + error * dt))
     end
-    local derivative = -yaw_rate
     
-    local pid_output = PID_KP * error + PID_KI * integral + PID_KD * derivative
-    pid_output = math.max(-100, math.min(100, pid_output))
+    -- PID输出
+    local pid_output = p_out + i_out + d_out + ff_out
+    
+    -- 高速转向限制（参考官方DRTSPD/DRTFCT）
+    if groundspeed > DERATE_SPEED_MPS then
+        local speed_over = groundspeed - DERATE_SPEED_MPS
+        local steer_reduction = speed_over * DERATE_FACTOR
+        local max_steer = OUTPUT_LIMIT - steer_reduction
+        if max_steer < MIN_STEER_DEG then
+            max_steer = MIN_STEER_DEG
+        end
+        pid_output = math.max(-max_steer, math.min(max_steer, pid_output))
+    else
+        pid_output = math.max(-OUTPUT_LIMIT, math.min(OUTPUT_LIMIT, pid_output))
+    end
+    
+    last_pid_output = pid_output
     
     local left_pwm = speed_pwm
     local right_pwm = speed_pwm
     
     -- 转向时：根据油门大小动态调整转向范围，保证电机不停止
     -- 只有当有效转向大于死区阈值时才执行转向
-    if turn_factor > 0 and speed_pwm > 1000 and math.abs(effective_steering) > 5 then
-        local speed_factor = (speed_pwm - 1000) / 1000
+    if turn_factor > 0 and speed_pwm > 1500 and math.abs(effective_steering) > 5 then
+        local speed_factor = (speed_pwm - 1500) / 500
         local max_turn_ratio = speed_factor * 0.4
         local turn_ratio = math.abs(effective_steering) / 100 * max_turn_ratio
         
@@ -171,34 +265,34 @@ local function pid_control(ch1_value, ch2_value, ch3_value, now)
         end
     end
     
-    -- 最低速度保护：任何时候都不能低于当前速度的70%
-    if speed_pwm > 1000 then
-        local min_speed = 1000 + (speed_pwm - 1000) * 0.7
+    -- 最低速度保护：任何时候都不能低于当前速度的50%
+    if speed_pwm > 1500 then
+        local min_speed = 1500 + (speed_pwm - 1500) * 0.5
         left_pwm = math.max(min_speed, left_pwm)
         right_pwm = math.max(min_speed, right_pwm)
     end
     
     -- 油门为0时，禁用PID和姿态辅助，电机完全停止
-    if speed_pwm <= 1000 then
-        return 1000, 1000, throttle, steering_ch1, ch2_offset / 5, 0, roll_deg, pitch_deg, speed_pwm, effective_steering
+    if speed_pwm <= 1500 then
+        return 1500, 1500, throttle, steering_ch1, ch2_offset / 5, 0, roll_deg, pitch_deg, speed_pwm, effective_steering
     end
     
-    -- PID辅助转向（只增加，不减少）
+    -- PID辅助转向（参考官方输出）
     if pid_output > 0 then
-        left_pwm = math.min(2000, left_pwm + (pid_output / 100) * 100)
+        left_pwm = math.min(2000, left_pwm + pid_output)
     elseif pid_output < 0 then
-        right_pwm = math.min(2000, right_pwm - (pid_output / 100) * 100)
+        right_pwm = math.min(2000, right_pwm - pid_output)
     end
     
     -- 姿态辅助（有油门时实时调整，防止翻船）
-    if speed_pwm > 1000 then
+    if speed_pwm > 1500 then
         local roll_correction = roll_deg * ROLL_KP
-        left_pwm = math.max(1000, math.min(2000, left_pwm - roll_correction))
-        right_pwm = math.max(1000, math.min(2000, right_pwm + roll_correction))
+        left_pwm = math.max(1500, math.min(2000, left_pwm - roll_correction))
+        right_pwm = math.max(1500, math.min(2000, right_pwm + roll_correction))
         
         local pitch_correction = pitch_deg * PITCH_KP
-        left_pwm = math.max(1000, math.min(2000, left_pwm - pitch_correction))
-        right_pwm = math.max(1000, math.min(2000, right_pwm - pitch_correction))
+        left_pwm = math.max(1500, math.min(2000, left_pwm - pitch_correction))
+        right_pwm = math.max(1500, math.min(2000, right_pwm - pitch_correction))
     end
     
     return left_pwm, right_pwm, throttle, steering_ch1, ch2_offset / 5, pid_output, roll_deg, pitch_deg, speed_pwm, effective_steering
@@ -278,8 +372,8 @@ local function handle_state_machine(ch7_value, ch1_value, ch2_value, ch3_value)
                 for chan = 1, 4 do
                     SRV_Channels:set_output_pwm_chan_timeout(chan-1, 0, 0)
                 end
-                SRV_Channels:set_output_pwm_chan_timeout(4, 1000, 0)
-                SRV_Channels:set_output_pwm_chan_timeout(5, 1000, 0)
+                SRV_Channels:set_output_pwm_chan_timeout(4, 1500, 0)
+                SRV_Channels:set_output_pwm_chan_timeout(5, 1500, 0)
                 current_state = STATE_BOAT_MODE
                 log_message("✓ 已切换到无人船PID模式 - PWM1-4已禁用，PWM5-6已解锁")
                 gcs:send_text(0, "PWM1-4已设置为0，PWM5-6已解锁")
