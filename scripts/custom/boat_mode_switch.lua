@@ -159,9 +159,9 @@ local function handle_state_machine(ch7_value, ch2_value, ch3_value)
                 for chan = 1, 4 do
                     SRV_Channels:set_output_pwm_chan_timeout(chan-1, 0, 0)
                 end
-                -- 解锁PWM5-6（设置为1000停止）
-            SRV_Channels:set_output_pwm_chan_timeout(4, 1000, 0)  -- PWM5
-            SRV_Channels:set_output_pwm_chan_timeout(5, 1000, 0)  -- PWM6
+                -- 解锁PWM5-6（设置为1500停止）
+            SRV_Channels:set_output_pwm_chan_timeout(4, 1500, 0)  -- PWM5
+            SRV_Channels:set_output_pwm_chan_timeout(5, 1500, 0)  -- PWM6
                 current_state = STATE_BOAT_MODE
                 log_message("✓ 已切换到无人船模式 - PWM1-4已禁用，PWM5-6已解锁")
                 gcs:send_text(0, "PWM1-4已设置为0，PWM5-6已解锁")
@@ -182,22 +182,22 @@ local function handle_state_machine(ch7_value, ch2_value, ch3_value)
             SRV_Channels:set_output_pwm_chan_timeout(5, 0, 0)  -- PWM6
             log_message("✓ 已退出无人船模式 - PWM5-6已禁用")
         else
-            -- CH2映射到PWM6：1500时输出1000停止，小于1500时正向输出
-            -- CH2<1500 → PWM6=1000+4×(1500-CH2)，CH2≥1500 → PWM6=1000
-            local pwm6_value = 1000
+            -- CH2映射到PWM6：1500时输出1500停止，小于1500时正向输出(1500-2000)
+            -- CH2<1500 → PWM6=1500+2×(1500-CH2)，CH2≥1500 → PWM6=1500
+            local pwm6_value = 1500
             if ch2_value < 1500 then
-                pwm6_value = 1000 + 4 * (1500 - ch2_value)
+                pwm6_value = 1500 + 2 * (1500 - ch2_value)
             end
-            pwm6_value = math.min(2000, pwm6_value)
+            pwm6_value = math.max(1500, math.min(2000, pwm6_value))
             SRV_Channels:set_output_pwm_chan_timeout(5, pwm6_value, 0)  -- PWM6
             
-            -- CH3映射到PWM5：1500时输出1000停止，大于1500时正向输出
-            -- CH3>1500 → PWM5=1000+4×(CH3-1500)，CH3≤1500 → PWM5=1000
-            local pwm5_value = 1000
+            -- CH3映射到PWM5：1500时输出1500停止，大于1500时正向输出(1500-2000)
+            -- CH3>1500 → PWM5=1500+2×(CH3-1500)，CH3≤1500 → PWM5=1500
+            local pwm5_value = 1500
             if ch3_value > 1500 then
-                pwm5_value = 1000 + 4 * (ch3_value - 1500)
+                pwm5_value = 1500 + 2 * (ch3_value - 1500)
             end
-            pwm5_value = math.min(2000, pwm5_value)
+            pwm5_value = math.max(1500, math.min(2000, pwm5_value))
             SRV_Channels:set_output_pwm_chan_timeout(4, pwm5_value, 0)  -- PWM5
         end
         
@@ -205,16 +205,16 @@ local function handle_state_machine(ch7_value, ch2_value, ch3_value)
         if now - last_print_time > PRINT_INTERVAL then
             local ch2_percent = ((ch2_value - 1500) / 500) * 100
             local ch3_percent = ((ch3_value - 1500) / 500) * 100
-            local pwm6_value = 1000
+            local pwm6_value = 1500
             if ch2_value < 1500 then
-                pwm6_value = 1000 + 4 * (1500 - ch2_value)
+                pwm6_value = 1500 + 2 * (1500 - ch2_value)
             end
-            pwm6_value = math.min(2000, pwm6_value)
-            local pwm5_value = 1000
+            pwm6_value = math.max(1500, math.min(2000, pwm6_value))
+            local pwm5_value = 1500
             if ch3_value > 1500 then
-                pwm5_value = 1000 + 4 * (ch3_value - 1500)
+                pwm5_value = 1500 + 2 * (ch3_value - 1500)
             end
-            pwm5_value = math.min(2000, pwm5_value)
+            pwm5_value = math.max(1500, math.min(2000, pwm5_value))
             gcs:send_text(0, string.format("CH2:%d(%.0f%%)->PWM6:%d CH3:%d(%.0f%%)->PWM5:%d",
                 ch2_value, ch2_percent, pwm6_value, ch3_value, ch3_percent, pwm5_value))
             last_print_time = now
